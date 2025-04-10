@@ -68,7 +68,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_fetch_devices()
 
             except Exception as ex:
-                _LOGGER.error(f"Login failed: {ex}")
+                _LOGGER.error("Login failed: %s", ex)
                 errors["base"] = "user_login_failed"
 
         data_schema = vol.Schema(
@@ -124,7 +124,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
                             family_name,
                         )
                     except Exception as e:
-                        _LOGGER.warning(f"Failed to decode family name: {e}")
+                        _LOGGER.warning("Failed to decode family name: %s", e)
                         # If decoding fails, use the original name
                         pass
 
@@ -230,7 +230,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
             )
 
         except Exception as ex:
-            _LOGGER.error(f"Error fetching devices: {ex}")
+            _LOGGER.error("Error fetching devices: %s", ex)
             # Always return a flow result, never None
             return self.async_abort(reason="fetch_devices_failed")
 
@@ -352,7 +352,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
                 )
 
             except Exception as ex:
-                _LOGGER.error(f"Import failed: {ex}")
+                _LOGGER.error("Import failed: %s", ex)
                 return self.async_abort(reason="user_login_failed")
 
         # If import data is incomplete, show the form
