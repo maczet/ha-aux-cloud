@@ -154,7 +154,9 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
                     )
                 except Exception as e:
                     _LOGGER.warning(
-                        f"Failed to fetch shared devices for family {family_id}: {e}"
+                        "Failed to fetch shared devices for family %s: %s",
+                        family_id,
+                        e,
                     )
                     shared_devices = []
 
@@ -268,7 +270,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
 
                 return self.async_create_entry(title=title, data=config)
             except Exception as ex:
-                _LOGGER.error(f"Error creating entry: {ex}")
+                _LOGGER.error("Error creating entry: %s", ex)
                 errors["base"] = "unknown"
 
         # Prepare device options for selection
@@ -430,8 +432,7 @@ class AuxCloudOptionsFlowHandler(OptionsFlow):
 
                 return self.async_create_entry(title="", data={})
             except Exception as ex:
-                _LOGGER.error(f"Error updating config entry: {ex}")
-
+                _LOGGER.error("Error updating config entry: %s", ex)
         # Fetch all devices to allow re-selection
         email = self.config_entry.data.get(CONF_EMAIL)
         password = self.config_entry.data.get(CONF_PASSWORD)

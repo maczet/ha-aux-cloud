@@ -221,4 +221,4 @@ class AuxSwitchEntity(BaseEntity, CoordinatorEntity, SwitchEntity):
 
             await self._set_device_params({self._option: int(state)})
         except Exception as ex:
-            _LOGGER.error(f"Failed to set switch state for {self._device_id}: {ex}")
+            _LOGGER.error("Failed to set switch state for %s: %s", self._device_id, ex)
