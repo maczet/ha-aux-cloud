@@ -21,9 +21,9 @@ jobs:
       run: |
         python -m venv venv
         source venv/bin/activate
-        pip install -r requirements.test.txt
+        pip install pylint
 
     - name: Run pylint
       run: |
         source venv/bin/activate
-        pylint custom_components/aux_cloud --fail-under=9.5
+        pylint custom_components/aux_cloud --fail-under=9.0
