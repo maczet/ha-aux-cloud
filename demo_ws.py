@@ -1,8 +1,8 @@
 import asyncio
 import os
 import pathlib
-from pprint import pprint
 import time
+from pprint import pprint
 
 import yaml
 
@@ -11,7 +11,7 @@ from custom_components.aux_cloud.api.aux_cloud import LICENSE_ID, AuxCloudAPI
 
 def get_config_path():
     current_dir = pathlib.Path(__file__).parent
-    return os.path.join(current_dir, "config.yaml")
+    return os.path.join(current_dir, "docs", "dev", "config.yaml")
 
 
 if __name__ == "__main__":

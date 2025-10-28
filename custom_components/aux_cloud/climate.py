@@ -45,7 +45,6 @@ from .api.const import (
     AC_POWER,
     AC_POWER_OFF,
     AC_POWER_ON,
-    ACFanSpeed,
 )
 from .const import (
     DOMAIN,
@@ -315,7 +314,7 @@ class AuxACClimateEntity(BaseEntity, CoordinatorEntity, ClimateEntity):
     def fan_mode(self):
         """Return the fan mode."""
         return FAN_MODE_AUX_TO_HA.get(
-            self._get_device_params().get(ACFanSpeed.PARAM_NAME), FAN_AUTO
+            self._get_device_params().get(AC_FAN_SPEED), FAN_AUTO
         )
 
     async def async_set_fan_mode(self, fan_mode):
