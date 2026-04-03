@@ -1,4 +1,5 @@
 from enum import auto
+import json
 
 
 # Common constants
@@ -227,6 +228,19 @@ class AuxProducts:
         if product_id in AuxProducts.DeviceType.HEAT_PUMP:
             return AuxProducts.HP_SPECIAL_PARAMS
         return None
+
+    @staticmethod
+    def is_v3_heat_pump(device: dict) -> bool:
+        """Determine if a device is a v3 or later heat pump based on its parameters."""
+        try:
+            version = json.loads(device.get("extern", "{}"))
+        except json.JSONDecodeError:
+            return False
+
+        return (
+            version.get("ver", 0) >= 3
+            and device.get("productId") in AuxProducts.DeviceType.HEAT_PUMP
+        )
 
 
 """

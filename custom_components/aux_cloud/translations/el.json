@@ -1,0 +1,162 @@
+{
+  "config": {
+    "flow_title": "AUX Cloud: {name}",
+    "abort": {
+      "single_instance_allowed": "Έχει ήδη διαμορφωθεί. Επιτρέπεται μόνο μία διαμόρφωση.",
+      "no_devices_found": "Δεν βρέθηκαν συσκευές AUX Cloud. Παρακαλώ ελέγξτε τον λογαριασμό σας.",
+      "fetch_devices_failed": "Αποτυχία ανάκτησης συσκευών από το AUX Cloud.",
+      "login_required": "Απαιτείται σύνδεση πριν από την επιλογή συσκευών."
+    },
+    "error": {
+      "user_login_failed": "Αποτυχία σύνδεσης. Ελέγξτε τα στοιχεία σας.",
+      "cannot_connect": "Αποτυχία σύνδεσης με τον διακομιστή AUX Cloud.",
+      "invalid_auth": "Μη έγκυρος έλεγχος ταυτότητας",
+      "unknown": "Απροσδόκητο σφάλμα"
+    },
+    "step": {
+      "user": {
+        "title": "Σύνδεση στο AUX Cloud",
+        "description": "Εισαγάγετε τα στοιχεία του λογαριασμού σας στο AUX Cloud",
+        "data": {
+          "email": "Email",
+          "password": "Κωδικός πρόσβασης",
+          "region": "Περιοχή"
+        }
+      },
+      "select_devices": {
+        "title": "Επιλογή συσκευών AUX Cloud",
+        "description": "Βρέθηκαν {devices_count} συσκευές σε {families_count} σπίτια. Επιλέξτε τις συσκευές που θέλετε να προσθέσετε στο Home Assistant.",
+        "data": {
+          "selected_devices": "Επιλογή συσκευών"
+        }
+      }
+    },
+    "progress": {
+      "fetching_devices": "Ανάκτηση των συσκευών σας... Αυτό μπορεί να διαρκέσει λίγο."
+    }
+  },
+  "options": {
+    "abort": {
+      "missing_credentials": "Λείπουν τα στοιχεία σύνδεσης. Παρακαλώ επαναδιαμορφώστε την ολοκλήρωση.",
+      "no_devices_found": "Δεν βρέθηκαν συσκευές AUX Cloud. Παρακαλώ ελέγξτε τον λογαριασμό σας.",
+      "fetch_devices_failed": "Αποτυχία ανάκτησης συσκευών από το AUX Cloud."
+    },
+    "step": {
+      "init": {
+        "title": "Ενημέρωση συσκευών AUX Cloud",
+        "description": "Επιλέξτε ποιες συσκευές θέλετε να παρακολουθείτε και να ελέγχετε με το Home Assistant.",
+        "data": {
+          "selected_devices": "Επιλογή συσκευών"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "ambient_temperature": {
+        "name": "Θερμοκρασία Περιβάλλοντος"
+      },
+      "water_tank_temperature": {
+        "name": "Θερμοκρασία Δεξαμενής Ζεστού Νερού"
+      },
+      "hot_water_temperature": {
+        "name": "Θερμοκρασία Ζεστού Νερού"
+      },
+      "ac_temperature": {
+        "name": "Θερμοκρασία Κλιματιστικού"
+      }
+    },
+    "water_heater": {
+      "aux_water": {
+        "name": "Θερμοσίφωνας"
+      }
+    },
+    "climate": {
+      "aux_heater": {
+        "name": "Θερμαντήρας",
+        "state": {
+          "off": "Ανενεργό",
+          "heat": "Θέρμανση",
+          "cool": "Ψύξη"
+        }
+      },
+      "aux_ac": {
+        "name": "Κλιματιστικό"
+      }
+    },
+    "select": {
+      "aux_select_qtmode": {
+        "name": "Αθόρυβη Λειτουργία",
+        "state": {
+          "off": "Ανενεργό",
+          "quiet_1": "Αθόρυβο Επίπεδο 1",
+          "quiet_2": "Αθόρυβο Επίπεδο 2"
+        }
+      },
+      "aux_select_auto_water_temp": {
+        "name": "Αυτόματη Θερμοκρασία Νερού",
+        "state": {
+          "off": "Ανενεργό",
+          "level_1": "Ρύθμιση 1",
+          "level_2": "Ρύθμιση 2",
+          "level_3": "Ρύθμιση 3",
+          "level_4": "Ρύθμιση 4",
+          "level_5": "Ρύθμιση 5",
+          "level_6": "Ρύθμιση 6",
+          "level_7": "Ρύθμιση 7",
+          "level_8": "Ρύθμιση 8",
+          "user_defined": "Καθορισμένο από τον χρήστη"
+        }
+      }
+    },
+    "switch": {
+      "aux_ecomode": {
+        "name": "Οικονομική Λειτουργία"
+      },
+      "aux_ac_power": {
+        "name": "Ισχύς Κλιματιστικού"
+      },
+      "aux_hp_power": {
+        "name": "Ισχύς Αντλίας Θερμότητας"
+      },
+      "aux_water_power": {
+        "name": "Ισχύς Θερμοσίφωνα"
+      },
+      "aux_fast_hotwater": {
+        "name": "Γρήγορο Ζεστό Νερό"
+      },
+      "aux_aux_heat": {
+        "name": "Βοηθητική Θέρμανση"
+      },
+      "aux_self_cleaning": {
+        "name": "Αυτοκαθαρισμός"
+      },
+      "aux_child_lock": {
+        "name": "Παιδικό Κλείδωμα"
+      },
+      "aux_comfortable_wind": {
+        "name": "Άνετος Αέρας"
+      },
+      "aux_health_mode": {
+        "name": "Λειτουργία Υγείας"
+      },
+      "aux_mildew_proof": {
+        "name": "Αντιμουχλική Προστασία"
+      },
+      "aux_sleep_mode": {
+        "name": "Λειτουργία Ύπνου"
+      },
+      "aux_screen_display": {
+        "name": "Εμφάνιση Οθόνης"
+      },
+      "aux_power_limit": {
+        "name": "Περιορισμός Ισχύος"
+      }
+    },
+    "number": {
+      "aux_power_limit_percentage": {
+        "name": "Ποσοστό Περιορισμού Ισχύος"
+      }
+    }
+  }
+}
