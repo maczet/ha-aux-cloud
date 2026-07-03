@@ -4,3 +4,7 @@ pipfile
 pipfile.lock
 .idea
 /config.yaml
+
+# Local Home Assistant dev/debug instance
+/venv
+/config
