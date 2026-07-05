@@ -15,12 +15,28 @@
     },
     "step": {
       "user": {
-        "title": "Logowanie do AUX Cloud",
-        "description": "Wprowadź dane logowania do konta AUX Cloud",
+        "title": "AUX Cloud",
+        "description": "Której aplikacji używasz do sterowania urządzeniami AUX?",
+        "menu_options": {
+          "ac_freedom": "Aplikacja AC Freedom (serwer regionalny)",
+          "aux_home": "Aplikacja AUX Home (serwer EU)"
+        }
+      },
+      "ac_freedom": {
+        "title": "Logowanie AC Freedom",
+        "description": "Wprowadź dane logowania do konta AC Freedom i wybierz region serwera dla swojego konta.",
         "data": {
           "email": "Email",
           "password": "Hasło",
           "region": "Region"
+        }
+      },
+      "aux_home": {
+        "title": "Logowanie AUX Home",
+        "description": "Wprowadź dane logowania do konta AUX Home. Używany jest serwer EU.",
+        "data": {
+          "email": "Email",
+          "password": "Hasło"
         }
       },
       "select_devices": {

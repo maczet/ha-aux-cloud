@@ -242,6 +242,7 @@ class AuxACClimateEntity(BaseEntity, CoordinatorEntity, ClimateEntity):
         self._attr_min_temp = 16
         self._attr_max_temp = 32
         self._attr_target_temperature_step = 0.5
+        self._attr_precision = 0.1
         self.entity_id = f"climate.{self._attr_unique_id}"
 
     @property

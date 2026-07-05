@@ -15,12 +15,28 @@
     },
     "step": {
       "user": {
-        "title": "AUX Cloud Login",
-        "description": "Enter your AUX Cloud account credentials",
+        "title": "AUX Cloud",
+        "description": "Which app do you use to control your AUX appliances?",
+        "menu_options": {
+          "ac_freedom": "AC Freedom app (regional server)",
+          "aux_home": "AUX Home app (EU server)"
+        }
+      },
+      "ac_freedom": {
+        "title": "AC Freedom Login",
+        "description": "Enter your AC Freedom account credentials and pick the server region for your account.",
         "data": {
           "email": "Email",
           "password": "Password",
           "region": "Region"
+        }
+      },
+      "aux_home": {
+        "title": "AUX Home Login",
+        "description": "Enter your AUX Home account credentials. The EU server is used.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
         }
       },
       "select_devices": {

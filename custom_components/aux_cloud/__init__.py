@@ -12,17 +12,16 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api.aux_cloud import AuxCloudAPI
+from .api.aux_home import AuxHomeAPI
 from .const import (
     _LOGGER,
     DOMAIN,
     DATA_AUX_CLOUD_CONFIG,
     PLATFORMS,
     CONF_SELECTED_DEVICES,
-    MAX_FAILED_POLLS,
 )
-from .util import DeviceStateHelper
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=60)
+MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=30)
 
 # Schema to include email and password (device selection is handled in config flow)
 CONFIG_SCHEMA = vol.Schema(
@@ -93,7 +92,6 @@ class AuxCloudCoordinator(DataUpdateCoordinator):
         self.password = password
         self.selected_device_ids = selected_device_ids
         self.devices = []
-        self._device_state_helpers: dict[str, DeviceStateHelper] = {}
 
     def get_device_by_endpoint_id(self, endpoint_id: str):
         """Get a device by its endpoint ID."""
@@ -106,21 +104,12 @@ class AuxCloudCoordinator(DataUpdateCoordinator):
             None,
         )
 
-    def get_state_helper(self, endpoint_id: str, initial_params: dict) -> DeviceStateHelper:
-        """Get or create a shared state helper for a single physical device."""
-        helper = self._device_state_helpers.get(endpoint_id)
-        if helper is None:
-            helper = DeviceStateHelper(initial_params, MAX_FAILED_POLLS)
-            self._device_state_helpers[endpoint_id] = helper
-        return helper
-
     async def _async_update_data(self):
         """Fetch data from AUX Cloud."""
         _LOGGER.debug("Updating AUX Cloud data...")
 
         try:
             if not self.api.is_logged_in():
-                # Attempt to log in
                 _LOGGER.debug("Logging into AUX Cloud API...")
                 login_success = await self.api.login(self.email, self.password)
                 if not login_success:
@@ -130,57 +119,98 @@ class AuxCloudCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Fetching families from AUX Cloud API...")
                 await self.api.get_families()
 
-            # Create a single list of tasks for fetching devices (shared and non-shared)
-            device_tasks = []
-
-            for family_id in self.api.families:
-                device_tasks.append(
-                    self.api.get_devices(
-                        family_id,
-                        shared=False,
-                        selected_devices=self.selected_device_ids,
+            # On first run (no devices cached yet), call get_devices() to
+            # discover device IDs, names, product keys and other metadata.
+            if not self.devices:
+                _LOGGER.debug("No cached devices — running initial device discovery")
+                device_tasks = []
+                for family_id in self.api.families:
+                    device_tasks.append(
+                        self.api.get_devices(
+                            family_id,
+                            shared=False,
+                            selected_devices=self.selected_device_ids,
+                        )
                     )
-                )
-                device_tasks.append(
-                    self.api.get_devices(
-                        family_id,
-                        shared=True,
-                        selected_devices=self.selected_device_ids,
+                    device_tasks.append(
+                        self.api.get_devices(
+                            family_id,
+                            shared=True,
+                            selected_devices=self.selected_device_ids,
+                        )
                     )
-                )
-
-            # Run all tasks concurrently
-            devices_results = await asyncio.gather(
-                *device_tasks, return_exceptions=True
-            )
-
-            # Process results and handle exceptions
-            all_devices = []
-
-            for result in devices_results:
-                for device in result:
-                    if isinstance(device, Exception):
+                results = await asyncio.gather(*device_tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, Exception):
+                        _LOGGER.warning("AUX Cloud: device discovery failed: %s", result)
                         continue
-                    if (
-                        device["endpointId"] in self.selected_device_ids
-                        or not self.selected_device_ids
-                    ):
-                        all_devices.append(device)
+                    for device in result:
+                        if (
+                            device["endpointId"] in self.selected_device_ids
+                            or not self.selected_device_ids
+                        ):
+                            self.devices.append(device)
+                _LOGGER.debug("Discovered %d device(s)", len(self.devices))
 
-            self.devices = all_devices
+            # Try to refresh live state via the per-device query endpoint.
+            # Only AUX Home exposes query_device_state with this
+            # (device_id, product_key, password) signature; AuxCloudAPI uses a
+            # different signature and gets its fresh state from get_devices()
+            # below, so calling it here for AC Freedom would raise TypeError.
+            got_fresh = False
+            if isinstance(self.api, AuxHomeAPI):
+                query_tasks = [
+                    self.api.query_device_state(
+                        device["endpointId"],
+                        device.get("_aux_home_raw", {}).get("productKey", "00010001"),
+                        device.get("_aux_home_raw", {}).get("password", ""),
+                    )
+                    for device in self.devices
+                ]
+                fresh_results = await asyncio.gather(*query_tasks, return_exceptions=True)
+                for device, fresh_params in zip(self.devices, fresh_results):
+                    if isinstance(fresh_params, Exception):
+                        _LOGGER.debug(
+                            "AUX Home: query_device_state failed for %s: %s",
+                            device["endpointId"], fresh_params,
+                        )
+                    elif fresh_params:
+                        device["params"] = fresh_params
+                        got_fresh = True
+
+            if not got_fresh:
+                # query_device_state unavailable or failed — refresh from server cache
+                device_tasks = []
+                for family_id in self.api.families:
+                    device_tasks.append(
+                        self.api.get_devices(
+                            family_id,
+                            shared=False,
+                            selected_devices=self.selected_device_ids,
+                        )
+                    )
+                    device_tasks.append(
+                        self.api.get_devices(
+                            family_id,
+                            shared=True,
+                            selected_devices=self.selected_device_ids,
+                        )
+                    )
+                results = await asyncio.gather(*device_tasks, return_exceptions=True)
+                all_devices = []
+                for result in results:
+                    if isinstance(result, Exception):
+                        _LOGGER.warning("AUX Cloud: device fetch failed: %s", result)
+                        continue
+                    for device in result:
+                        if (
+                            device["endpointId"] in self.selected_device_ids
+                            or not self.selected_device_ids
+                        ):
+                            all_devices.append(device)
+                self.devices = all_devices
+
             _LOGGER.debug("Fetched AUX Cloud data: %s devices", len(self.devices))
-
-            current_endpoint_ids = {
-                device["endpointId"]
-                for device in self.devices
-                if "endpointId" in device
-            }
-            stale_helpers = set(self._device_state_helpers) - current_endpoint_ids
-            for endpoint_id in stale_helpers:
-                self._device_state_helpers.pop(endpoint_id, None)
-
-            self.async_set_updated_data({"devices": self.devices})
-
             return {"devices": self.devices}
 
         except Exception as e:
@@ -190,7 +220,7 @@ class AuxCloudCoordinator(DataUpdateCoordinator):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AUX Cloud from a config entry."""
     region = entry.data.get(CONF_REGION, "eu")
-    api = AuxCloudAPI(region=region)
+    api = AuxHomeAPI(region=region) if region.startswith("aux_home") else AuxCloudAPI(region=region)
     email = entry.data.get(CONF_EMAIL)
     password = entry.data.get(CONF_PASSWORD)
     selected_device_ids = entry.data.get(CONF_SELECTED_DEVICES, [])

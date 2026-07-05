@@ -12,9 +12,17 @@ from homeassistant.helpers.device_registry import async_get as async_get_device_
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
 from .api.aux_cloud import AuxCloudAPI
+from .api.aux_home import AuxHomeAPI
 from .const import DATA_AUX_CLOUD_CONFIG, DOMAIN, CONF_FAMILIES, CONF_SELECTED_DEVICES
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _build_api(region: str):
+    """Return the correct API client for *region*."""
+    if region.startswith("aux_home"):
+        return AuxHomeAPI(region=region)
+    return AuxCloudAPI(region=region)
 
 
 # pylint: disable=abstract-method
@@ -32,50 +40,61 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
         self._families = {}
         self._available_devices = []
 
+    def _stored(self, key, default=""):
+        """Return a value previously imported from configuration.yaml, if any."""
+        if DATA_AUX_CLOUD_CONFIG in self.hass.data:
+            return self.hass.data[DATA_AUX_CLOUD_CONFIG].get(key, default)
+        return default
+
+    async def _async_login_and_continue(self, errors: dict):
+        """
+        Log in with the credentials collected in a branch step and continue to
+        device selection.  Returns a flow result on success, or None so the
+        caller re-shows its own form with *errors* populated.
+        """
+        self._aux_cloud = _build_api(self._region)
+        try:
+            await self._aux_cloud.login(self._email, self._password)
+            return await self.async_step_fetch_devices()
+        except Exception as ex:  # noqa: BLE001 - surface any login failure as one error
+            _LOGGER.error("Login failed: %s", ex)
+            errors["base"] = "user_login_failed"
+            return None
+
     async def async_step_user(self, user_input=None):
-        """Handle a flow initiated by the user."""
+        """First step: choose which AUX app / server to connect to."""
         if self._async_current_entries():
             # Config entry already exists, only one allowed.
             return self.async_abort(reason="single_instance_allowed")
 
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["ac_freedom", "aux_home"],
+        )
+
+    async def async_step_ac_freedom(self, user_input=None):
+        """Collect credentials for the AC Freedom app (regional servers)."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
         errors = {}
-        stored_email = (
-            self.hass.data[DATA_AUX_CLOUD_CONFIG].get(CONF_EMAIL)
-            if DATA_AUX_CLOUD_CONFIG in self.hass.data
-            else ""
-        )
-        stored_password = (
-            self.hass.data[DATA_AUX_CLOUD_CONFIG].get(CONF_PASSWORD)
-            if DATA_AUX_CLOUD_CONFIG in self.hass.data
-            else ""
-        )
-        stored_region = (
-            self.hass.data[DATA_AUX_CLOUD_CONFIG].get(CONF_REGION)
-            if DATA_AUX_CLOUD_CONFIG in self.hass.data
-            else "eu"
-        )
+        stored_region = self._stored(CONF_REGION, "eu")
+        if stored_region.startswith("aux_home"):
+            stored_region = "eu"
 
         if user_input is not None:
             self._email = user_input[CONF_EMAIL]
             self._password = user_input[CONF_PASSWORD]
             self._region = user_input[CONF_REGION]
 
-            self._aux_cloud = AuxCloudAPI(region=self._region)
-
-            try:
-                await self._aux_cloud.login(self._email, self._password)
-
-                # Fetch all families and devices after successful login
-                return await self.async_step_fetch_devices()
-
-            except Exception as ex:
-                _LOGGER.error("Login failed: %s", ex)
-                errors["base"] = "user_login_failed"
+            result = await self._async_login_and_continue(errors)
+            if result is not None:
+                return result
 
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_EMAIL, default=stored_email): str,
-                vol.Required(CONF_PASSWORD, default=stored_password): str,
+                vol.Required(CONF_EMAIL, default=self._stored(CONF_EMAIL)): str,
+                vol.Required(CONF_PASSWORD, default=self._stored(CONF_PASSWORD)): str,
                 vol.Required(CONF_REGION, default=stored_region): vol.In(
                     ["eu", "usa", "cn", "rus"]
                 ),
@@ -83,7 +102,36 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(
-            step_id="user",
+            step_id="ac_freedom",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
+    async def async_step_aux_home(self, user_input=None):
+        """Collect credentials for the AUX Home app (EU server)."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
+        errors = {}
+
+        if user_input is not None:
+            self._email = user_input[CONF_EMAIL]
+            self._password = user_input[CONF_PASSWORD]
+            self._region = "aux_home_eu"
+
+            result = await self._async_login_and_continue(errors)
+            if result is not None:
+                return result
+
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_EMAIL, default=self._stored(CONF_EMAIL)): str,
+                vol.Required(CONF_PASSWORD, default=self._stored(CONF_PASSWORD)): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="aux_home",
             data_schema=data_schema,
             errors=errors,
         )
@@ -326,7 +374,7 @@ class AuxCloudFlowHandler(ConfigFlow, domain=DOMAIN):
             # Create a config entry directly from the imported data
             # For imports, we'll fetch and include all devices
             try:
-                self._aux_cloud = AuxCloudAPI(region=self._region)
+                self._aux_cloud = _build_api(self._region)
                 await self._aux_cloud.login(self._email, self._password)
 
                 # Fetch all families and devices
@@ -444,7 +492,7 @@ class AuxCloudOptionsFlowHandler(OptionsFlow):
             return self.async_abort(reason="missing_credentials")
 
         try:
-            self._aux_cloud = AuxCloudAPI(region=region)
+            self._aux_cloud = _build_api(region)
             await self._aux_cloud.login(email, password)
 
             # Fetch all families and devices

@@ -44,7 +44,9 @@ MODE_MAP_HA_TO_AUX = {v: k for k, v in MODE_MAP_AUX_AC_TO_HA.items()}
 FAN_MODE_HA_TO_AUX = {
     FAN_AUTO: ACFanSpeed.AUTO,
     FAN_LOW: ACFanSpeed.LOW,
+    "mid lower": ACFanSpeed.MEDIUM_LOW,
     FAN_MEDIUM: ACFanSpeed.MEDIUM,
+    "mid higher": ACFanSpeed.MEDIUM_HIGH,
     FAN_HIGH: ACFanSpeed.HIGH,
     "turbo": ACFanSpeed.TURBO,
     "silent": ACFanSpeed.MUTE,
@@ -63,5 +65,3 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.NUMBER,
 ]
-
-MAX_FAILED_POLLS = 5

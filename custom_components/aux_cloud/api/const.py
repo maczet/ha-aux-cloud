@@ -1,5 +1,4 @@
 from enum import auto
-import json
 
 
 # Common constants
@@ -18,11 +17,11 @@ AC_POWER_ON = {AC_POWER: 1}
 AC_TEMPERATURE_TARGET = "temp"
 AC_TEMPERATURE_AMBIENT = "envtemp"
 
-AC_MODE_COOLING = {AUX_MODE: 0}
-AC_MODE_HEATING = {AUX_MODE: 1}
+AC_MODE_COOLING = {AUX_MODE: 1}
+AC_MODE_HEATING = {AUX_MODE: 4}
 AC_MODE_DRY = {AUX_MODE: 2}
-AC_MODE_FAN = {AUX_MODE: 3}
-AC_MODE_AUTO = {AUX_MODE: 4}
+AC_MODE_FAN = {AUX_MODE: 6}
+AC_MODE_AUTO = {AUX_MODE: 0}
 
 AC_SWING_VERTICAL = "ac_vdir"
 AC_SWING_VERTICAL_ON = {AC_SWING_VERTICAL: 1}
@@ -87,6 +86,8 @@ class ACFanSpeed(auto):
     HIGH = 3
     TURBO = 4
     MUTE = 5
+    MEDIUM_LOW = 6   # AUX Home "mid lower"  — between low and medium
+    MEDIUM_HIGH = 7  # AUX Home "mid higher" — between medium and high
 
 
 # Heat Pump constants
@@ -228,19 +229,6 @@ class AuxProducts:
         if product_id in AuxProducts.DeviceType.HEAT_PUMP:
             return AuxProducts.HP_SPECIAL_PARAMS
         return None
-
-    @staticmethod
-    def is_v3_heat_pump(device: dict) -> bool:
-        """Determine if a device is a v3 or later heat pump based on its parameters."""
-        try:
-            version = json.loads(device.get("extern", "{}"))
-        except json.JSONDecodeError:
-            return False
-
-        return (
-            version.get("ver", 0) >= 3
-            and device.get("productId") in AuxProducts.DeviceType.HEAT_PUMP
-        )
 
 
 """

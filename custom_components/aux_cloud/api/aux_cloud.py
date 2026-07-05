@@ -8,7 +8,7 @@ from typing import TypedDict
 
 import aiohttp
 
-from .const import AuxProducts, HP_HOT_WATER_TANK_TEMPERATURE
+from .const import AuxProducts
 from .util import encrypt_aes_cbc_zero_padding
 from .aux_cloud_ws import AuxCloudWebSocket
 
@@ -40,7 +40,6 @@ AES_INITIAL_VECTOR = bytes(
         ]
     ]
 )
-
 # pylint: disable=line-too-long
 LICENSE = "PAFbJJ3WbvDxH5vvWezXN5BujETtH/iuTtIIW5CE/SeHN7oNKqnEajgljTcL0fBQQWM0XAAAAAAnBhJyhMi7zIQMsUcwR/PEwGA3uB5HLOnr+xRrci+FwHMkUtK7v4yo0ZHa+jPvb6djelPP893k7SagmffZmOkLSOsbNs8CAqsu8HuIDs2mDQAAAAA="
 # pylint: enable=line-too-long
@@ -74,31 +73,6 @@ class AuxApiError(Exception):
     """Exception raised when querying devices fails."""
 
 
-def _decode_v3_hp_tank_temp_from_key_states(key_states_hex: str) -> int | None:
-    """Decode heat pump tank temperature from key_states.
-
-    Observed encoding:
-      temp_c = key_states_bytes[2] - 32
-
-    Return x10 (e.g. 360 => 36.0C), to match other temps in integration.
-    """
-    if not key_states_hex or not isinstance(key_states_hex, str):
-        return None
-
-    try:
-        raw = bytes.fromhex(key_states_hex)
-        if len(raw) < 3:
-            return None
-
-        temp_c = raw[2] - 32
-        if temp_c < -20 or temp_c > 120:
-            return None
-
-        return int(temp_c) * 10
-    except Exception:
-        return None
-
-
 class AuxCloudAPI:
     """
     Class for interacting with AUX cloud services.
@@ -117,6 +91,7 @@ class AuxCloudAPI:
         self.password = None
         self.loginsession = None
         self.userid = None
+
         self.ws_api = None
 
     def _get_headers(self, **kwargs: str):
@@ -196,8 +171,9 @@ class AuxCloudAPI:
         }
         json_payload = json.dumps(payload, separators=(",", ":"))
 
-        # Token used as an obfuscation attempt, the server validates this
+        # Token used as an obfuscation attempt, the server validates the
         token = hashlib.md5(f"{json_payload}{BODY_ENCRYPT_KEY}".encode()).hexdigest()
+
         # Token used as key in aes encryption of json body
         md5 = hashlib.md5(
             f"{current_time}{TIMESTAMP_TOKEN_ENCRYPT_KEY}".encode()
@@ -225,6 +201,7 @@ class AuxCloudAPI:
         """
         Check if the user is logged in.
         """
+        # TODO: Implement a request to check if the session is still valid
         return self.loginsession is not None and self.userid is not None
 
     async def get_families(self):
@@ -282,6 +259,7 @@ class AuxCloudAPI:
         self,
         familyid: str,
         shared=False,
+        # List of device endpointIds to fetch from the server
         selected_devices: list[str] = None,
     ):
         """
@@ -310,13 +288,16 @@ class AuxCloudAPI:
                     map(lambda dev: dev["devinfo"], json_data["data"]["shareFromOther"])
                 )
 
+            # Filter devices if selected_device_ids is provided to fetch only specific devices
             if selected_devices is not None:
                 devices = [
                     dev for dev in devices if dev["endpointId"] in selected_devices
                 ]
 
+            # Wait for all state tasks to complete
             device_states = await self.bulk_query_device_state(devices)
 
+            # Create tasks for fetching device parameters
             param_tasks = []
 
             for dev in devices:
@@ -328,6 +309,7 @@ class AuxCloudAPI:
                     ),
                     0,
                 )
+                # Initialize params as an empty dictionary
                 dev["params"] = {}
 
                 _LOGGER.debug(
@@ -337,29 +319,13 @@ class AuxCloudAPI:
                     dev,
                 )
 
-                is_heat_pump = dev.get("productId") in AuxProducts.DeviceType.HEAT_PUMP
+                # Create tasks for fetching device params
+                dev_params_task = asyncio.create_task(
+                    self.get_device_params(dev, params=list([]))
+                )
+                dev_special_params_task = None
 
-                # Keep original behavior for other devices.
-                # For heat pumps, use ["ver"] because newer models need snapshot mode.
-                if is_heat_pump:
-                    dev_params_task = asyncio.create_task(
-                        self.get_device_params(
-                            dev,
-                            params=(
-                                ["ver"] if AuxProducts.is_v3_heat_pump(dev) else []
-                            ),
-                        )
-                    )
-                    dev_special_params_task = None
-                else:
-                    dev_params_task = asyncio.create_task(
-                        self.get_device_params(dev, params=list([]))
-                    )
-                    dev_special_params_task = None
-
-                if AuxProducts.get_special_params_list(
-                    dev["productId"]
-                ) is not None and not AuxProducts.is_v3_heat_pump(dev):
+                if AuxProducts.get_special_params_list(dev["productId"]) is not None:
                     dev_special_params_task = asyncio.create_task(
                         self.get_device_params(
                             dev,
@@ -369,8 +335,10 @@ class AuxCloudAPI:
                         )
                     )
 
+                # Add tasks to the list
                 param_tasks.append([dev, dev_params_task, dev_special_params_task])
 
+            # Wait for all tasks to complete
             results = await asyncio.gather(
                 *[
                     asyncio.gather(
@@ -383,7 +351,10 @@ class AuxCloudAPI:
                 return_exceptions=True,
             )
 
-            for i, (dev, _, _) in enumerate(param_tasks):
+            # Process the results
+            for i, (dev, dev_params_task, dev_special_params_task) in enumerate(
+                param_tasks
+            ):
                 dev_params = results[i][0]
                 dev_special_params = results[i][1] if len(results[i]) > 1 else None
 
@@ -400,13 +371,6 @@ class AuxCloudAPI:
                     dev_special_params, BaseException
                 ):
                     dev["params"].update(dev_special_params)
-
-                # Heat pump tank temperature decoding
-                if AuxProducts.is_v3_heat_pump(dev):
-                    key_states = dev["params"].get("key_states")
-                    decoded = _decode_v3_hp_tank_temp_from_key_states(key_states)
-                    if decoded is not None:
-                        dev["params"][HP_HOT_WATER_TANK_TEMPERATURE] = decoded
 
                 dev["last_updated"] = time.strftime(
                     "%Y-%m-%d %H:%M:%S", time.localtime()
@@ -440,8 +404,10 @@ class AuxCloudAPI:
                 "header": self._get_directive_header(
                     namespace="DNA.QueryState",
                     name="queryState",
+                    # Original header name
                     messageType="controlgw.batch",
                     message_id_prefix=self.userid,
+                    # Original header name, probably can be skipped
                     timstamp=f"{timestamp}",
                 ),
                 "payload": {"studata": queried_device, "msgtype": "batch"},
@@ -479,8 +445,10 @@ class AuxCloudAPI:
                 "header": self._get_directive_header(
                     namespace="DNA.QueryState",
                     name="queryState",
+                    # Original header name
                     messageType="controlgw.batch",
                     message_id_prefix=self.userid,
+                    # Original header name, probably can be skipped
                     timstamp=f"{timestamp}",
                 ),
                 "payload": {"studata": queried_devices, "msgtype": "batch"},
@@ -505,17 +473,12 @@ class AuxCloudAPI:
         raise AuxApiError(f"Failed to query device state: {json_data}")
 
     async def _act_device_params(
-        self,
-        device: dict,
-        act: str,
-        params: list[str] = None,
-        vals: list[str] = None,
+        self, device: dict, act: str, params: list[str] = None, vals: list[str] = None
     ):
         """
         Query device parameters. If no parameters are provided, default parameters are queried.
         https://docs-ibroadlink-com.translate.goog/public/configuration-sdk+ctc/message_table/?_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp
         """
-
         if params is None:
             params = []
         if vals is None:
@@ -549,27 +512,13 @@ class AuxCloudAPI:
             ).encode()
         ).decode()
 
-        req_params = list(params)
-        req_vals = list(vals)
-
-        if (
-            AuxProducts.is_v3_heat_pump(device)
-            and "ver" not in req_params
-            and act == "set"
-        ):
-            req_params.append("ver")
-            req_vals.append([{"idx": 1, "val": 3}])
-
-        header = self._get_directive_header(
-            namespace="DNA.KeyValueControl",
-            name="KeyValueControl",
-            message_id_prefix=device["endpointId"],
-            timstamp=f"{int(time.time())}",
-        )
-
         data = {
             "directive": {
-                "header": header,
+                "header": self._get_directive_header(
+                    namespace="DNA.KeyValueControl",
+                    name="KeyValueControl",
+                    message_id_prefix=device["endpointId"],
+                ),
                 "endpoint": {
                     "devicePairedInfo": {
                         "did": device["endpointId"],
@@ -582,15 +531,16 @@ class AuxCloudAPI:
                     "cookie": {},
                     "devSession": device["devSession"],
                 },
-                "payload": {"act": act, "params": req_params, "vals": req_vals},
+                "payload": {"act": act, "params": params, "vals": vals},
             }
         }
 
         data["directive"]["payload"]["did"] = device["endpointId"]
 
-        # Keep original integration behavior for single-param GET
-        if len(req_params) == 1 and act == "get":
+        # Special case for getting ambient mode
+        if len(params) == 1 and act == "get":
             data["directive"]["payload"]["vals"] = [[{"val": 0, "idx": 1}]]
+
         json_data = await self._make_request(
             method="POST",
             endpoint="device/control/v2/sdkcontrol",
@@ -626,8 +576,7 @@ class AuxCloudAPI:
 
     async def get_device_params(self, device: dict, params: list[str] = None):
         """
-        Query device parameters.
-        If no parameters are provided, default parameters are queried.
+        Query device parameters. If no parameters are provided, default parameters are queried.
         """
         if params is None:
             params = []
@@ -654,12 +603,10 @@ class AuxCloudAPI:
             loginsession=self.loginsession,
             userid=self.userid,
         )
-
         await self.ws_api.initialize_websocket()
 
-        timeout = 10
+        timeout = 10  # Timeout in seconds
         start_time = time.time()
-
         while not self.ws_api.api_initialized:
             if time.time() - start_time > timeout:
                 raise TimeoutError("WebSocket API initialization timed out.")

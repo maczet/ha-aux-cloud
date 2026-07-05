@@ -46,11 +46,7 @@ SENSORS: dict[str, dict[str, any]] = {
             device_class="temperature",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         ),
-        "get_fn": lambda d: (
-            d.get("params", {}).get(HP_HOT_WATER_TANK_TEMPERATURE, 0) / 10
-            if AuxProducts.is_v3_heat_pump(d)
-            else d.get("params", {}).get(HP_HOT_WATER_TANK_TEMPERATURE, 0)
-        ),
+        "get_fn": lambda d: d.get("params", {}).get(HP_HOT_WATER_TANK_TEMPERATURE, 0),
     },
     HP_HOT_WATER_TEMPERATURE_TARGET: {
         "type": "temperature",
