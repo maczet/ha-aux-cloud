@@ -74,6 +74,10 @@ class AuxApiError(Exception):
     """Exception raised when querying devices fails."""
 
 
+class AuxApiFunctionNotSupportedError(AuxApiError):
+    """Raised when the device reports that the requested function/params are not supported."""
+
+
 def _decode_v3_hp_tank_temp_from_key_states(key_states_hex: str) -> int | None:
     """Decode heat pump tank temperature from key_states.
 
@@ -343,7 +347,7 @@ class AuxCloudAPI:
                 # For heat pumps, use ["ver"] because newer models need snapshot mode.
                 if is_heat_pump:
                     dev_params_task = asyncio.create_task(
-                        self.get_device_params(
+                        self._get_heat_pump_params_with_fallback(
                             dev,
                             params=(
                                 ["ver"] if AuxProducts.is_v3_heat_pump(dev) else []
@@ -628,6 +632,15 @@ class AuxCloudAPI:
 
             return response_dict
 
+        event = json_data.get("event", {})
+        if (
+            event.get("header", {}).get("name") == "ErrorResponse"
+            and event.get("payload", {}).get("type") == "FUNCTION_NOT_SUPPORT"
+        ):
+            raise AuxApiFunctionNotSupportedError(
+                f"Function not supported for device {device['endpointId']}: {json_data}"
+            )
+
         raise AuxApiError(f"Failed to query device state: {data}, {json_data}")
 
     async def get_device_params(self, device: dict, params: list[str] = None):
@@ -638,6 +651,20 @@ class AuxCloudAPI:
         if params is None:
             params = []
         return await self._act_device_params(device, "get", params)
+
+    async def _get_heat_pump_params_with_fallback(
+        self, device: dict, params: list[str]
+    ):
+        """Query heat pump params, retrying with named params on FUNCTION_NOT_SUPPORT.
+
+        Some heat pump firmware variants reject the "empty params"/["ver"]
+        snapshot query with FUNCTION_NOT_SUPPORT. In that case, retry with the
+        explicit named parameter list instead.
+        """
+        try:
+            return await self.get_device_params(device, params=params)
+        except AuxApiFunctionNotSupportedError:
+            return await self.get_device_params(device, params=AuxProducts.HP_PARAMS)
 
     async def set_device_params(self, device: dict, values: dict):
         """
